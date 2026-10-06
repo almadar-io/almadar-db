@@ -1,0 +1,17 @@
+#!/bin/sh
+# Pre-commit: lint staged .ts/.tsx and block the commit on errors. That is the
+# ONLY job of this hook.
+#
+# Lockfile refresh is owned by almadar-pattern-sync (the cascade's syncLockfile),
+# NOT by this hook. Do not regenerate or `git add` lockfiles here.
+
+STAGED_TS=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx)$' | grep -v '^archive/' || true)
+[ -z "$STAGED_TS" ] && exit 0
+
+echo "Running almadar lint on staged files..."
+echo "$STAGED_TS" | xargs pnpm exec eslint --no-warn-ignored --max-warnings 0 || {
+  echo ""
+  echo "Commit blocked by lint errors. Fix them and try again."
+  exit 1
+}
+exit 0

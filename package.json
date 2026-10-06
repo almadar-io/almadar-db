@@ -1,0 +1,99 @@
+{
+  "name": "@almadar/db",
+  "version": "0.1.0",
+  "description": "Database clients, bootstrap and every storage adapter behind the @almadar/core PersistenceAdapter contract.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./mock": {
+      "types": "./dist/mock.d.ts",
+      "import": "./dist/mock.js",
+      "require": "./dist/mock.cjs"
+    },
+    "./firebase": {
+      "types": "./dist/firebase.d.ts",
+      "import": "./dist/firebase.js",
+      "require": "./dist/firebase.cjs"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js",
+      "require": "./dist/browser.cjs"
+    },
+    "./file": {
+      "types": "./dist/file.d.ts",
+      "import": "./dist/file.js",
+      "require": "./dist/file.cjs"
+    },
+    "./backend": {
+      "types": "./dist/backend.d.ts",
+      "import": "./dist/backend.js",
+      "require": "./dist/backend.cjs"
+    },
+    "./emulator": {
+      "types": "./dist/emulator.d.ts",
+      "import": "./dist/emulator.js",
+      "require": "./dist/emulator.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "build:watch": "tsup --watch",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest --run",
+    "prepublishOnly": "pnpm run build",
+    "prepare": "git config core.hooksPath .githooks"
+  },
+  "dependencies": {
+    "@almadar/core": "^10.119.0",
+    "@almadar/logger": "^1.16.0",
+    "firebase-admin": "^14.2.0",
+    "nano": "^10.1.3",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@almadar/eslint-plugin": "^2.21.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.10.0",
+    "@typescript-eslint/parser": "8.65.0",
+    "eslint": "10.0.0",
+    "fake-indexeddb": "6.2.5",
+    "tsup": "^8.0.0",
+    "turbo": "^2.8.17",
+    "vitest": "^2.1.0",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/almadar-io/almadar-db.git",
+    "directory": "docs/packages/db"
+  },
+  "license": "BSL-1.1",
+  "keywords": [
+    "almadar",
+    "database",
+    "persistence",
+    "firestore",
+    "postgres",
+    "couchdb"
+  ],
+  "homepage": "https://github.com/almadar-io/almadar#readme",
+  "packageManager": "pnpm@10.30.3"
+}
