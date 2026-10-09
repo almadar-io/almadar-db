@@ -18,6 +18,11 @@
       "import": "./dist/mock.js",
       "require": "./dist/mock.cjs"
     },
+    "./rows": {
+      "types": "./dist/rows.d.ts",
+      "import": "./dist/rows.js",
+      "require": "./dist/rows.cjs"
+    },
     "./firebase": {
       "types": "./dist/firebase.d.ts",
       "import": "./dist/firebase.js",
