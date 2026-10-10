@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@almadar/core':
-        specifier: ^10.119.1
-        version: 10.119.1
+        specifier: ^10.122.0
+        version: 10.122.0
       '@almadar/logger':
-        specifier: ^1.16.1
-        version: 1.16.1
+        specifier: ^1.17.0
+        version: 1.17.0
       firebase-admin:
         specifier: ^14.2.0
         version: 14.5.0
@@ -60,16 +60,16 @@ importers:
 
 packages:
 
-  '@almadar/core@10.119.1':
-    resolution: {integrity: sha512-Fe8HghP9ixnIpJUpEb1Fem903Au7wGGhCnnwqmeaYVbDc22UFlWCnm3w88lld9smNI7amGxrv02uPj8PA8V8Rg==}
+  '@almadar/core@10.122.0':
+    resolution: {integrity: sha512-dZOrmceQm5PM3ZzQS/NpiauYYua40ddKUwEhwGVve+gf/Vg/u4BAMsqBYL7l8jYPjkuEDcn13wzl77wldWHrYA==}
 
   '@almadar/eslint-plugin@2.21.0':
     resolution: {integrity: sha512-H010BxnM/s2v17EcFzh3hGTD1o3AJCBLqrmh1Fupvgdq2oP/PDicU5XAWTYt9apdIiM5yDs11trUT3BYFkGqCA==}
     peerDependencies:
       eslint: '>=8.0.0'
 
-  '@almadar/logger@1.16.1':
-    resolution: {integrity: sha512-/szUhrkcbuIIF/o93bN4VVg41/u3T4fB6Ldfm/oZ4/WSRHnVqKToU2Y/3fC1ZYiL0dOEgwbbmoncFTh8e0bFuA==}
+  '@almadar/logger@1.17.0':
+    resolution: {integrity: sha512-uskg2LHs5cWyCSbGia4fHo4nrvtmefN4Ms3YQJR9V9dRcMcrMHtpZnDMexA9VUcwXT8UD4dwuBolV/Gswdwe7g==}
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -2186,7 +2186,7 @@ packages:
 
 snapshots:
 
-  '@almadar/core@10.119.1':
+  '@almadar/core@10.122.0':
     dependencies:
       zod: 3.25.76
 
@@ -2195,9 +2195,9 @@ snapshots:
       eslint: 10.0.0
       jsonc-eslint-parser: 3.1.0
 
-  '@almadar/logger@1.16.1':
+  '@almadar/logger@1.17.0':
     dependencies:
-      '@almadar/core': 10.119.1
+      '@almadar/core': 10.122.0
 
   '@esbuild/aix-ppc64@0.21.5':
     optional: true
