@@ -10,6 +10,8 @@ export default defineConfig({
     backend: 'src/backend/index.ts',
     file: 'src/credentials/file-credential-persistence.ts',
     emulator: 'src/emulator/index.ts',
+    sidecars: 'src/sidecars/index.ts',
+    'sidecars-cli': 'src/sidecars/cli.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
