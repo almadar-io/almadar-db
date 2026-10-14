@@ -102,3 +102,35 @@ it('control: an adapter without them gets none, so callers fall back', () => {
   expect(store.query).toBeUndefined();
   expect(store.listPage).toBeUndefined();
 });
+
+describe('observedPersistence and queryPage', () => {
+  let log: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    configureLogOutput({ format: 'json', context: { appId: 'app-1' } });
+  });
+  afterEach(() => {
+    configureLogOutput({ format: 'console' });
+    log.mockRestore();
+  });
+
+  it('forwards queryPage and the inner capabilities, recording the call', async () => {
+    const inner = new InMemoryPersistence();
+    inner.seed({ Order: [{ id: 'a', n: 1 }, { id: 'b', n: 2 }] });
+    const store = observedPersistence(inner, { service: 'test-db' });
+    expect(store.queryCapabilities?.('Order')).toEqual(inner.queryCapabilities('Order'));
+    const page = await store.queryPage?.('Order', { filter: { kind: 'compare', field: 'n', op: '>', value: 1 } });
+    expect(page).toEqual({ rows: [{ id: 'b', n: 2, createdAt: expect.any(String), updatedAt: expect.any(String) }], total: 1 });
+    const lines = log.mock.calls.map((args) => { const v: JsonValue = JSON.parse(String(args[0])); return v; });
+    expect(lines.some((line) => isStructuredLogEntry(line) && line.call?.op === 'queryPage:Order')).toBe(true);
+  });
+
+  it('control: an inner adapter without queryPage gets neither member, so it never claims a capability', () => {
+    const bare: PersistenceAdapter = {
+      async create() { return { id: 'x' }; }, async update() {}, async delete() {}, async getById() { return null; }, async list() { return []; },
+    };
+    const store = observedPersistence(bare, { service: 'test-db' });
+    expect(store.queryPage).toBeUndefined();
+    expect(store.queryCapabilities).toBeUndefined();
+  });
+});

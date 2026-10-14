@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@almadar/core':
-        specifier: ^10.124.0
-        version: 10.124.0
+        specifier: ^10.128.0
+        version: 10.128.0
       '@almadar/logger':
-        specifier: ^1.17.0
-        version: 1.17.0
+        specifier: ^1.18.0
+        version: 1.18.0
       firebase-admin:
         specifier: ^14.2.0
         version: 14.5.0
@@ -25,8 +25,8 @@ importers:
         version: 8.23.1
     devDependencies:
       '@almadar/eslint-plugin':
-        specifier: ^2.21.0
-        version: 2.21.0(eslint@10.0.0)
+        specifier: ^2.22.0
+        version: 2.22.0(eslint@10.0.0)
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.5
@@ -60,16 +60,19 @@ importers:
 
 packages:
 
-  '@almadar/core@10.124.0':
-    resolution: {integrity: sha512-hZJOXBvYG1hfKeQv+FbiLc+8D3ZAc+L8FmeAhWVWdZf1/64BZSxJAM/NfOshSS0KwL6OdW/bdW94AyZSHdXoww==}
+  '@almadar/core@10.128.0':
+    resolution: {integrity: sha512-H5gDoXFAcLfj6CrKonK+zvGPapm/uorR3gO9zE8IebQCYWotCZphyFnegNwJPZg0MNAL/sDX2+vGk7tlQGFOqw==}
+    engines: {node: '>=22'}
 
-  '@almadar/eslint-plugin@2.21.0':
-    resolution: {integrity: sha512-H010BxnM/s2v17EcFzh3hGTD1o3AJCBLqrmh1Fupvgdq2oP/PDicU5XAWTYt9apdIiM5yDs11trUT3BYFkGqCA==}
+  '@almadar/eslint-plugin@2.22.0':
+    resolution: {integrity: sha512-LKs49DVTMpx0DKhLLqX3vdqB4FDsgFbvIatTYEi01kQSU4BLE593jtJ/9TsfPXflw0vk3EA5RGX5a3JJU8/5WQ==}
+    engines: {node: '>=22'}
     peerDependencies:
       eslint: '>=8.0.0'
 
-  '@almadar/logger@1.17.0':
-    resolution: {integrity: sha512-uskg2LHs5cWyCSbGia4fHo4nrvtmefN4Ms3YQJR9V9dRcMcrMHtpZnDMexA9VUcwXT8UD4dwuBolV/Gswdwe7g==}
+  '@almadar/logger@1.18.0':
+    resolution: {integrity: sha512-9DkdCx3R4x0NGx6REkK6LD2H598pziE0MENeQctuuMf3SzNxAtEljIhv09HTHx7lySiVdbPm/4Qy+PnAq/Qc+w==}
+    engines: {node: '>=22'}
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -2186,18 +2189,18 @@ packages:
 
 snapshots:
 
-  '@almadar/core@10.124.0':
+  '@almadar/core@10.128.0':
     dependencies:
       zod: 3.25.76
 
-  '@almadar/eslint-plugin@2.21.0(eslint@10.0.0)':
+  '@almadar/eslint-plugin@2.22.0(eslint@10.0.0)':
     dependencies:
       eslint: 10.0.0
       jsonc-eslint-parser: 3.1.0
 
-  '@almadar/logger@1.17.0':
+  '@almadar/logger@1.18.0':
     dependencies:
-      '@almadar/core': 10.124.0
+      '@almadar/core': 10.128.0
 
   '@esbuild/aix-ppc64@0.21.5':
     optional: true

@@ -22,6 +22,7 @@ vi.mock('pg', async () => {
 });
 
 import { Pool, DatabaseError } from 'pg';
+import { FULL_QUERY_CAPABILITIES } from '@almadar/core';
 import { PostgresPersistence } from '../src/postgres/persistence.js';
 
 let pool: Pool;
@@ -151,5 +152,83 @@ describe('PostgresPersistence.listPage', () => {
     const page = await makeAdapter().listPage('Task', { page: 1, pageSize: 1, filters: [{ field: 'tags', op: 'array-contains', value: 'y' }] });
     expect(page).toEqual({ rows: [{ id: 'b', tags: ['y'] }], total: 2 });
     expect(queryMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('PostgresPersistence.queryPage', () => {
+  const columns = queryResult([
+    { column_name: 'id', data_type: 'text' },
+    { column_name: 'title', data_type: 'text' },
+    { column_name: 'tags', data_type: 'jsonb' },
+  ]);
+  const INTROSPECT = 'information_schema.columns';
+
+  it('declares every query form', () => {
+    expect(makeAdapter().queryCapabilities('Task')).toEqual(FULL_QUERY_CAPABILITIES);
+  });
+
+  it('reads the table columns once, runs one statement for rows and total, and strips the count column', async () => {
+    queryMock
+      .mockResolvedValueOnce(columns)
+      .mockResolvedValueOnce(queryResult([{ id: 'a', title: 'x', __total: 7 }, { id: 'b', title: 'y', __total: 7 }]));
+    const adapter = makeAdapter();
+    const page = await adapter.queryPage('Task', { filter: { kind: 'contains', field: 'title', text: 'x', caseSensitive: true }, limit: 2 });
+    expect(page).toEqual({ rows: [{ id: 'a', title: 'x' }, { id: 'b', title: 'y' }], total: 7 });
+    expect(queryMock.mock.calls[0][0]).toContain(INTROSPECT);
+    expect(queryMock.mock.calls[0][1]).toEqual(['tasks']);
+    expect(queryMock.mock.calls[1][0]).toContain('position($1::text in "title") > 0');
+    expect(queryMock.mock.calls[1][1]).toEqual(['x', 2]);
+    expect(queryMock).toHaveBeenCalledTimes(2);
+
+    queryMock.mockResolvedValueOnce(queryResult([{ id: 'a', title: 'x', __total: 1 }]));
+    await adapter.queryPage('Task', {});
+    expect(queryMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('treats a column the table lacks as missing, after one re-read of the columns', async () => {
+    queryMock
+      .mockResolvedValueOnce(columns)
+      .mockResolvedValueOnce(queryResult([]))
+      .mockResolvedValueOnce(columns)
+      .mockResolvedValueOnce(queryResult([{ id: 'a', __total: 1 }]));
+    const adapter = makeAdapter();
+    await adapter.queryPage('Task', {});
+    const page = await adapter.queryPage('Task', { filter: { kind: 'isNull', field: 'ghost', isNull: true } });
+    expect(page.total).toBe(1);
+    expect(queryMock.mock.calls[3][0]).toContain('WHERE TRUE');
+    expect(queryMock.mock.calls[2][0]).toContain(INTROSPECT);
+  });
+
+  it('a window past the end returns no rows but still the total, from a count query', async () => {
+    queryMock
+      .mockResolvedValueOnce(columns)
+      .mockResolvedValueOnce(queryResult([]))
+      .mockResolvedValueOnce(queryResult([{ total: 7 }]));
+    const page = await makeAdapter().queryPage('Task', { offset: 50, limit: 5 });
+    expect(page).toEqual({ rows: [], total: 7 });
+    expect(queryMock.mock.calls[2][0]).toBe('SELECT COUNT(*)::int AS total FROM "tasks"');
+  });
+
+  it('control: an empty first page needs no count query', async () => {
+    queryMock.mockResolvedValueOnce(columns).mockResolvedValueOnce(queryResult([]));
+    const page = await makeAdapter().queryPage('Task', { filter: { kind: 'const', value: false } });
+    expect(page).toEqual({ rows: [], total: 0 });
+    expect(queryMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('a zero limit still reports the total', async () => {
+    queryMock
+      .mockResolvedValueOnce(columns)
+      .mockResolvedValueOnce(queryResult([]))
+      .mockResolvedValueOnce(queryResult([{ total: 4 }]));
+    expect(await makeAdapter().queryPage('Task', { limit: 0 })).toEqual({ rows: [], total: 4 });
+  });
+
+  it('timestamps leave as ISO strings, like every other read', async () => {
+    queryMock
+      .mockResolvedValueOnce(columns)
+      .mockResolvedValueOnce(queryResult([{ id: 'a', createdAt: new Date('2026-01-02T03:04:05.000Z'), __total: 1 }]));
+    const page = await makeAdapter().queryPage('Task', {});
+    expect(page.rows[0]?.createdAt).toBe('2026-01-02T03:04:05.000Z');
   });
 });

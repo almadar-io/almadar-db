@@ -8,9 +8,10 @@
  * Call records and row quotas are `observedPersistence`'s, over any backend.
  */
 import type { DocumentData } from 'firebase-admin/firestore';
-import type { EntityRow, FieldValue, PersistenceAdapter, RowPage, RowPageRequest, StoreFilter, StoreFilterOp } from '@almadar/core';
+import type { EntityRow, FieldValue, PersistenceAdapter, QueryCapabilities, RowPage, RowPageRequest, RowQuery as RowQueryRequest, RowQueryPage, StoreFilter, StoreFilterOp } from '@almadar/core';
 import { getFirestore } from '../firebase/index.js';
-import { filterRows, pageRows } from '../data/row-query.js';
+import { filterRows, pageRows, totalFromWindow } from '../data/row-query.js';
+import { firestoreQueryCapabilities, planQuery, type FirestoreQueryPlan } from './query-plan.js';
 
 export interface RowDoc {
   readonly id: string;
@@ -34,6 +35,8 @@ export interface RowQuery {
 export interface RowCollection extends RowQuery {
   doc(id?: string): RowDoc;
   count(): Promise<number>;
+  /** Runs a native query plan: `docs` is the ordered window, `total` the documents matching its clauses. Absent = the store cannot push a query down. */
+  runPlan?(plan: FirestoreQueryPlan): Promise<{ docs: ReadonlyArray<{ readonly id: string; data(): DocumentData }>; total: number }>;
 }
 
 /**
@@ -42,6 +45,10 @@ export interface RowCollection extends RowQuery {
  */
 export interface AdminQuery {
   where(field: string, op: RowWhereOp, value: FieldValue | undefined): AdminQuery;
+  orderBy(field: string, direction: 'asc' | 'desc'): AdminQuery;
+  offset(count: number): AdminQuery;
+  limit(count: number): AdminQuery;
+  count(): { get(): Promise<{ data(): { count: number } }> };
   get(): Promise<{ docs: ReadonlyArray<{ readonly id: string; data(): DocumentData }> }>;
 }
 
@@ -53,10 +60,7 @@ export interface AdminDoc {
 }
 
 export interface AdminFirestore {
-  collection(path: string): AdminQuery & {
-    doc(id?: string): AdminDoc;
-    count(): { get(): Promise<{ data(): { count: number } }> };
-  };
+  collection(path: string): AdminQuery & { doc(id?: string): AdminDoc };
 }
 
 function rowQuery(query: AdminQuery): RowQuery {
@@ -88,6 +92,18 @@ export function firestoreRows(db: AdminFirestore = getFirestore()): RowFirestore
           };
         },
         async count() { const agg = await ref.count().get(); return agg.data().count; },
+        async runPlan(plan) {
+          let matching: AdminQuery = ref;
+          for (const w of plan.wheres) matching = matching.where(w.field, w.op, w.value);
+          if (plan.limit === 0) return { docs: [], total: (await matching.count().get()).data().count };
+          let windowed = matching;
+          for (const o of plan.orderBy) windowed = windowed.orderBy(o.field, o.direction);
+          if (plan.offset) windowed = windowed.offset(plan.offset);
+          if (plan.limit !== undefined) windowed = windowed.limit(plan.limit);
+          const { docs } = await windowed.get();
+          const known = totalFromWindow(docs.length, plan.offset ?? 0, plan.limit);
+          return { docs, total: known ?? (await matching.count().get()).data().count };
+        },
       };
     },
   };
@@ -116,11 +132,14 @@ export interface FirestorePersistenceOptions {
   /** Document path the rows hang under (`hosted/<appId>`), or '' for top-level entity collections. */
   root: string;
   firestore?: RowFirestore;
+  /** Fields (besides `id`) every document carries, non-null and indexed with the document id as tie-break; only these can order a pushed-down query, since Firestore's `orderBy` drops documents lacking the field. */
+  orderableFields?: readonly string[];
 }
 
 export class FirestorePersistence implements PersistenceAdapter {
   private readonly root: string;
   private readonly db: RowFirestore;
+  private readonly orderableFields: readonly string[];
 
   constructor(options: FirestorePersistenceOptions) {
     if (options.root !== '' && options.root.split('/').filter(Boolean).length % 2 !== 0) {
@@ -128,6 +147,7 @@ export class FirestorePersistence implements PersistenceAdapter {
     }
     this.root = options.root;
     this.db = options.firestore ?? firestoreRows();
+    this.orderableFields = options.orderableFields ?? [];
   }
 
   /** Path of the document an entity's rows hang under (holds per-entity markers); '' root has none. */
@@ -191,6 +211,22 @@ export class FirestorePersistence implements PersistenceAdapter {
   async listPage(entityType: string, request: RowPageRequest<EntityRow>): Promise<RowPage<EntityRow>> {
     const matched = await this.query(entityType, request.filters ?? []);
     return pageRows(matched, { ...request, filters: [] });
+  }
+
+  queryCapabilities(entityType: string): QueryCapabilities {
+    if (this.rows(entityType).runPlan === undefined) {
+      return { leaves: [], combinators: [], compareOps: [], orderableFields: { kind: 'listed', fields: [] }, window: false, exactTotal: false };
+    }
+    return firestoreQueryCapabilities(this.orderableFields);
+  }
+
+  async queryPage(entityType: string, query: RowQueryRequest): Promise<RowQueryPage> {
+    const plan = planQuery(query, this.orderableFields);
+    if (plan === null) return { rows: [], total: 0 };
+    const collection = this.rows(entityType);
+    if (!collection.runPlan) throw new Error(`FirestorePersistence.queryPage: the connected Firestore has no runPlan for ${entityType}`);
+    const { docs, total } = await collection.runPlan(plan);
+    return { rows: docs.map((d) => ({ ...d.data(), id: d.id })), total };
   }
 
   private async read(query: RowQuery): Promise<EntityRow[]> {

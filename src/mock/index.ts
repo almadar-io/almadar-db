@@ -5,3 +5,4 @@ export {
   entitySchemaOf,
 } from './MockPersistenceAdapter.js';
 export type { EntityField, EntitySchema, MockPersistenceConfig } from './MockPersistenceAdapter.js';
+export { stampSeedTimestamps } from './seed-timestamps.js';

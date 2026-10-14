@@ -2,47 +2,47 @@
  * In-memory filter / search / sort / page over entity rows: the one implementation used by stores
  * that cannot push the work down, and for the remainder a partial pushdown leaves.
  */
-import type { EntityRow, FieldValue, RowPage, RowPageRequest, StoreFilter } from '@almadar/core';
-
-type Comparable = string | number | boolean | Date;
-
-function comparable(value: FieldValue | undefined): value is Comparable {
-  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value instanceof Date;
-}
-
-function order(a: Comparable, b: Comparable): number {
-  const x = a instanceof Date ? a.getTime() : a;
-  const y = b instanceof Date ? b.getTime() : b;
-  if (x === y) return 0;
-  return x < y ? -1 : 1;
-}
+import { compareByField, rowMatchesPredicate, type EntityRow, type FieldValue, type RowPage, type RowPageRequest, type RowPredicate, type StoreFilter } from '@almadar/core';
 
 function listOf(value: FieldValue | undefined): readonly FieldValue[] | null {
   return Array.isArray(value) ? value : null;
 }
 
-/** Whether `row` satisfies one filter. A missing or null value matches only `!=` a non-null value. */
-export function rowMatches(row: EntityRow, filter: StoreFilter<EntityRow>): boolean {
-  const value = row[filter.field];
-  const target = filter.value;
-  if (value === null || value === undefined) return filter.op === '!=' && target !== null && target !== undefined;
+function predicateOf(filter: StoreFilter<EntityRow>): RowPredicate {
+  const { field, value } = filter;
+  const target = value ?? null;
   switch (filter.op) {
-    case '==': return value === target;
-    case '!=': return value !== target;
-    case '>': return comparable(target) && comparable(value) && order(value, target) > 0;
-    case '>=': return comparable(target) && comparable(value) && order(value, target) >= 0;
-    case '<': return comparable(target) && comparable(value) && order(value, target) < 0;
-    case '<=': return comparable(target) && comparable(value) && order(value, target) <= 0;
-    case 'in': return listOf(target)?.includes(value) ?? false;
-    case 'not-in': return !(listOf(target)?.includes(value) ?? true);
-    case 'contains': return typeof value === 'string' && typeof target === 'string' && value.toLowerCase().includes(target.toLowerCase());
-    case 'array-contains': return target !== undefined && (listOf(value)?.includes(target) ?? false);
+    case '==':
+    case '!=':
+    case '<':
+    case '<=':
+    case '>':
+    case '>=':
+      return { kind: 'compare', field, op: filter.op, value: target };
+    case 'in': {
+      const values = listOf(value);
+      return values ? { kind: 'member', field, values: [...values] } : { kind: 'const', value: false };
+    }
+    case 'not-in': {
+      const values = listOf(value);
+      return values
+        ? { kind: 'all', of: [{ kind: 'isNull', field, isNull: false }, { kind: 'not', of: { kind: 'member', field, values: [...values] } }] }
+        : { kind: 'const', value: false };
+    }
+    case 'contains':
+      return typeof value === 'string' ? { kind: 'contains', field, text: value, caseSensitive: false } : { kind: 'const', value: false };
+    case 'array-contains':
+      return target === null ? { kind: 'const', value: false } : { kind: 'hasElement', field, value: target };
     case 'array-contains-any': {
-      const have = listOf(value);
-      const want = listOf(target);
-      return have !== null && want !== null && want.some((v) => have.includes(v));
+      const values = listOf(value);
+      return { kind: 'any', of: (values ?? []).map((v) => ({ kind: 'hasElement', field, value: v })) };
     }
   }
+}
+
+/** Whether `row` satisfies one filter. A missing or null value matches only `!=` a non-null value. */
+export function rowMatches(row: EntityRow, filter: StoreFilter<EntityRow>): boolean {
+  return rowMatchesPredicate(row, predicateOf(filter));
 }
 
 export function filterRows(rows: readonly EntityRow[], filters: readonly StoreFilter<EntityRow>[]): EntityRow[] {
@@ -61,20 +61,21 @@ function searchRows(rows: readonly EntityRow[], search: string | undefined, fiel
 /** Missing values sort last in both directions. */
 export function sortRows(rows: readonly EntityRow[], sortBy: string | undefined, sortOrder: 'asc' | 'desc' = 'asc'): EntityRow[] {
   if (!sortBy) return [...rows];
-  return [...rows].sort((a, b) => {
-    const x = a[sortBy];
-    const y = b[sortBy];
-    const xMissing = x === null || x === undefined;
-    const yMissing = y === null || y === undefined;
-    if (xMissing || yMissing) return xMissing === yMissing ? 0 : xMissing ? 1 : -1;
-    if (!comparable(x) || !comparable(y)) return 0;
-    const c = order(x, y);
-    return sortOrder === 'asc' ? c : -c;
-  });
+  return [...rows].sort(compareByField(sortBy, sortOrder));
 }
 
 export function pageRows(rows: readonly EntityRow[], request: RowPageRequest<EntityRow>): RowPage<EntityRow> {
   const matched = sortRows(searchRows(filterRows(rows, request.filters ?? []), request.search, request.searchFields), request.sortBy, request.sortOrder);
   const start = (request.page - 1) * request.pageSize;
   return { rows: matched.slice(start, start + request.pageSize), total: matched.length };
+}
+
+/**
+ * The match count of a windowed read, when the window alone settles it: a non-empty window that
+ * ended before its limit holds the last match, an empty first page means no match. Null means the
+ * store must count (a full window, a window past the end, a zero limit).
+ */
+export function totalFromWindow(returned: number, offset: number, limit: number | undefined): number | null {
+  if (returned > 0) return limit === undefined || returned < limit ? offset + returned : null;
+  return offset === 0 && limit !== 0 ? 0 : null;
 }

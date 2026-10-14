@@ -1,4 +1,5 @@
-import type { EntityRow, PersistenceAdapter } from '@almadar/core';
+import { FULL_QUERY_CAPABILITIES, runRowQuery, type EntityRow, type PersistenceAdapter, type QueryCapabilities, type RowQuery, type RowQueryPage } from '@almadar/core';
+import { stampSeedTimestamps } from './seed-timestamps.js';
 
 /**
  * Simple in-memory persistence for dev/testing and offline previews.
@@ -15,12 +16,14 @@ export class InMemoryPersistence implements PersistenceAdapter {
    * of `[entityType, EntityRow[]]` entries. Rows without an `id` get one
    * generated at insert time; rows with an `id` keep it (so re-seeding
    * after a schema rebuild preserves identities used in render bindings).
+   * Every seeded row carries `createdAt`/`updatedAt`: an authored value is kept, an absent one is now.
    */
   seed(seedData: Record<string, EntityRow[]> | Iterable<[string, EntityRow[]]>): void {
     const entries: Iterable<[string, EntityRow[]]> =
       Symbol.iterator in Object(seedData)
         ? (seedData as Iterable<[string, EntityRow[]]>)
         : Object.entries(seedData as Record<string, EntityRow[]>);
+    const now = new Date().toISOString();
     for (const [entityType, rows] of entries) {
       if (!this.data.has(entityType)) {
         this.data.set(entityType, new Map());
@@ -28,7 +31,7 @@ export class InMemoryPersistence implements PersistenceAdapter {
       const collection = this.data.get(entityType)!;
       for (const row of rows) {
         const id = (row.id as string) || `${entityType}-${++this.idCounter}`;
-        collection.set(id, { ...row, id });
+        collection.set(id, { ...stampSeedTimestamps(row, now), id });
       }
     }
   }
@@ -71,6 +74,14 @@ export class InMemoryPersistence implements PersistenceAdapter {
   async list(entityType: string): Promise<EntityRow[]> {
     const collection = this.data.get(entityType);
     return collection ? Array.from(collection.values()) : [];
+  }
+
+  async queryPage(entityType: string, query: RowQuery): Promise<RowQueryPage> {
+    return runRowQuery(await this.list(entityType), query);
+  }
+
+  queryCapabilities(_entityType: string): QueryCapabilities {
+    return FULL_QUERY_CAPABILITIES;
   }
 
   /**

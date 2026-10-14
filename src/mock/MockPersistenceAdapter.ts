@@ -7,9 +7,10 @@
  * @packageDocumentation
  */
 
-import type { EntityField, EntityId, EntityPersistence, EntityRow, FieldValue, OrbitalEntity, PersistenceAdapter } from '@almadar/core';
+import { FULL_QUERY_CAPABILITIES, runRowQuery, type EntityField, type EntityId, type EntityPersistence, type EntityRow, type FieldValue, type OrbitalEntity, type PersistenceAdapter, type QueryCapabilities, type RowQuery, type RowQueryPage } from '@almadar/core';
 import { crossRelationValue, isRelationPlaceholder, linkSelfRelationField, projectionOf, RESERVED_FIELD_NAMES, sampleRow, sampleRowCount } from '@almadar/core/mock';
 import { createLogger } from '@almadar/logger';
+import { isoTimestamp, stampSeedTimestamps } from './seed-timestamps.js';
 import { seedRandom, randomInt, randomPastDate } from '@almadar/core/mock';
 
 const mockLog = createLogger('almadar:runtime:mock');
@@ -19,10 +20,6 @@ const mockLog = createLogger('almadar:runtime:mock');
  *  matching the compiled path's compile-baked-in mock semantics. */
 const DEFAULT_MOCK_SEED = 42;
 
-/** Reference timestamp used as `now` for seeded rows. Deterministic so
- *  diff observers don't see all rows as "changed" between frames just
- *  because the wallclock advanced. */
-const SEED_REFERENCE_TIMESTAMP = '2024-01-01T00:00:00.000Z';
 const MS_PER_DAY = 86_400_000;
 
 // ============================================================================
@@ -47,12 +44,6 @@ type RelationField = NamedEntityField & {
   type: 'relation';
   relation: { entity: string; entityId?: EntityId; cardinality?: string; field?: string };
 };
-
-/** The store keeps timestamps as ISO strings; a supplied Date or string is kept, anything else is absent. */
-function isoTimestamp(value: FieldValue | undefined): string | undefined {
-  if (value instanceof Date) return value.toISOString();
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
 
 /** Which seeded rows the viewer owns through `column`: every other row, except the row's own
  *  `id` (a self-identity column), where the viewer is exactly one row, the first. */
@@ -681,15 +672,10 @@ export class MockPersistenceAdapter implements PersistenceAdapter {
       mockLog.debug('seeding-from-instances', { count: instances.length, entity: entityName });
     }
 
+    const now = new Date().toISOString();
     for (const instance of instances) {
       const id = (instance.id as string) || this.nextId(entityName);
-      const item: EntityRow = {
-        ...instance,
-        id,
-        createdAt: instance.createdAt as string || SEED_REFERENCE_TIMESTAMP,
-        updatedAt: SEED_REFERENCE_TIMESTAMP,
-      };
-      store.set(id, item);
+      store.set(id, { ...stampSeedTimestamps(instance, now), id });
     }
   }
 
@@ -946,6 +932,14 @@ export class MockPersistenceAdapter implements PersistenceAdapter {
 
   async list(entityType: string): Promise<Array<EntityRow>> {
     return this.rowsOf(entityType);
+  }
+
+  async queryPage(entityType: string, query: RowQuery): Promise<RowQueryPage> {
+    return runRowQuery(this.rowsOf(entityType), query);
+  }
+
+  queryCapabilities(_entityType: string): QueryCapabilities {
+    return FULL_QUERY_CAPABILITIES;
   }
 
   // ============================================================================

@@ -15,7 +15,6 @@ import {
   type SidecarLock,
   type SidecarLockEntry,
 } from '@almadar/core/behavior-package';
-import { getStorage } from '../firebase/index.js';
 
 export type { SidecarLock, SidecarLockEntry };
 
@@ -51,11 +50,12 @@ export function storageBucket(name = process.env['FIREBASE_STORAGE_BUCKET']): Si
   if (!name) {
     throw new Error('FIREBASE_STORAGE_BUCKET is not set: the sidecar store bucket must be named explicitly');
   }
-  const bucket = getStorage().bucket(name);
+  // Loaded on first use: pulling a sidecar is a plain download and must run without Firebase.
+  const storage = async () => (await import('../firebase/index.js')).getStorage().bucket(name);
   return {
     name,
     async head(objectName) {
-      const file = bucket.file(objectName);
+      const file = (await storage()).file(objectName);
       const [exists] = await file.exists();
       if (!exists) return null;
       const [metadata] = await file.getMetadata();
@@ -63,7 +63,7 @@ export function storageBucket(name = process.env['FIREBASE_STORAGE_BUCKET']): Si
       return typeof token === 'string' && token.length > 0 ? token : undefined;
     },
     async upload(objectName, localPath, meta) {
-      const file = bucket.file(objectName);
+      const file = (await storage()).file(objectName);
       await pipeline(
         createReadStream(localPath),
         createGzip(),
@@ -78,7 +78,7 @@ export function storageBucket(name = process.env['FIREBASE_STORAGE_BUCKET']): Si
       );
     },
     async setDownloadToken(objectName, token) {
-      await bucket.file(objectName).setMetadata({ metadata: { firebaseStorageDownloadTokens: token } });
+      await (await storage()).file(objectName).setMetadata({ metadata: { firebaseStorageDownloadTokens: token } });
     },
   };
 }

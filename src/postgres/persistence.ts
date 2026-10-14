@@ -4,9 +4,9 @@
  */
 import type { Pool } from 'pg';
 import { DatabaseError } from 'pg';
-import type { EntityRow, PersistenceAdapter, RowPage, RowPageRequest, StoreFilter } from '@almadar/core';
+import { FULL_QUERY_CAPABILITIES, type EntityRow, type PersistenceAdapter, type QueryCapabilities, type RowPage, type RowPageRequest, type RowQuery, type RowQueryPage, type StoreFilter } from '@almadar/core';
 import { filterRows, pageRows } from '../data/row-query.js';
-import { buildPageQueries, buildWhere, deserializeRow, mintId, quoteIdent, serializeValue, tableNameFor, type SqlFilter } from './rows.js';
+import { buildPageQueries, buildQueryPageSql, buildWhere, columnKindOf, deserializeRow, mintId, queryFields, quoteIdent, serializeValue, tableNameFor, type SqlColumnKind, type SqlFilter } from './rows.js';
 
 /** Filter operators `buildWhere` expresses in SQL; the rest are applied in memory. */
 const SQL_OPS: ReadonlySet<string> = new Set(['==', '!=', '<', '<=', '>', '>=', 'in', 'not-in', 'contains']);
@@ -25,6 +25,7 @@ export interface PostgresPersistenceOptions {
 
 export class PostgresPersistence implements PersistenceAdapter {
   private readonly pool: Pool;
+  private readonly columnKinds = new Map<string, Map<string, SqlColumnKind>>();
 
   constructor(options: PostgresPersistenceOptions) {
     this.pool = options.pool;
@@ -115,6 +116,36 @@ export class PostgresPersistence implements PersistenceAdapter {
       this.pool.query<{ total: number }>(countSql, params.slice(0, params.length - 2)),
     ]);
     return { rows: pageResult.rows.map((row) => deserializeRow(row)), total: countResult.rows[0]?.total ?? 0 };
+  }
+
+  queryCapabilities(_entityType: string): QueryCapabilities {
+    return FULL_QUERY_CAPABILITIES;
+  }
+
+  async queryPage(entityType: string, query: RowQuery): Promise<RowQueryPage> {
+    const table = tableNameFor(entityType);
+    const kinds = await this.columnKindsFor(table, queryFields(query));
+    const built = buildQueryPageSql(table, query, (field) => kinds.get(field) ?? 'absent');
+    const result = await this.pool.query<EntityRow & { __total: number }>(built.sql, built.params);
+    const rows = result.rows.map(({ __total: _total, ...row }) => deserializeRow(row));
+    const first = result.rows[0];
+    if (first) return { rows, total: first.__total };
+    if ((query.offset ?? 0) === 0 && query.limit !== 0) return { rows, total: 0 };
+    const counted = await this.pool.query<{ total: number }>(built.countSql, built.countParams);
+    return { rows, total: counted.rows[0]?.total ?? 0 };
+  }
+
+  /** Column kinds of `table`, read from the database; re-read once when a queried field is not among them (a column added since). */
+  private async columnKindsFor(table: string, fields: readonly string[]): Promise<Map<string, SqlColumnKind>> {
+    const known = this.columnKinds.get(table);
+    if (known && fields.every((f) => known.has(f))) return known;
+    const result = await this.pool.query<{ column_name: string; data_type: string }>(
+      'SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1',
+      [table],
+    );
+    const kinds = new Map(result.rows.map((c) => [c.column_name, columnKindOf(c.data_type)] as const));
+    this.columnKinds.set(table, kinds);
+    return kinds;
   }
 
   async countRows(entityType: string): Promise<number> {

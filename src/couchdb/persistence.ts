@@ -2,13 +2,15 @@
  * CouchDB implementation of PersistenceAdapter: one database per entity type, schemaless docs.
  * `query` pushes the Mango-expressible filters to `_find` and applies the rest in memory.
  */
-import type { MangoSelector } from 'nano';
-import type { EntityRow, PersistenceAdapter, StoreFilter } from '@almadar/core';
-import { filterRows } from '../data/row-query.js';
+import type { MangoQuery, MangoSelector } from 'nano';
+import type { EntityRow, PersistenceAdapter, QueryCapabilities, RowQuery, RowQueryPage, StoreFilter } from '@almadar/core';
+import { filterRows, totalFromWindow } from '../data/row-query.js';
 import {
+  COUCHDB_QUERY_CAPABILITIES,
   databaseNameFor,
   docToRow,
   mangoOperatorFor,
+  mangoQueryFor,
   mintId,
   serializeRow,
   type CouchDBClient,
@@ -30,14 +32,18 @@ function isConflict(error: Error): boolean {
 
 export interface CouchDBPersistenceOptions {
   client: CouchDBClient;
+  /** Documents per `_find` request when `queryPage` reads without a limit or counts matches; default 1000. */
+  pageSize?: number;
 }
 
 export class CouchDBPersistence implements PersistenceAdapter {
   private readonly client: CouchDBClient;
   private readonly ensured = new Set<string>();
+  private readonly pageSize: number;
 
   constructor(options: CouchDBPersistenceOptions) {
     this.client = options.client;
+    this.pageSize = options.pageSize ?? 1000;
   }
 
   private dbFor(entityType: string): CouchDBDatabase<CouchDoc> {
@@ -133,5 +139,37 @@ export class CouchDBPersistence implements PersistenceAdapter {
       ? (await this.dbFor(entityType).find({ selector })).docs.map((doc) => docToRow(doc))
       : await this.list(entityType);
     return filterRows(rows, remainder);
+  }
+
+  queryCapabilities(_entityType: string): QueryCapabilities {
+    return COUCHDB_QUERY_CAPABILITIES;
+  }
+
+  async queryPage(entityType: string, query: RowQuery): Promise<RowQueryPage> {
+    const { selector, sort } = mangoQueryFor(query);
+    const db = this.dbFor(entityType);
+    const offset = query.offset ?? 0;
+    const docs = query.limit === undefined
+      ? await this.findAll(db, { selector, sort, ...(offset > 0 ? { skip: offset } : {}) })
+      : query.limit === 0
+        ? []
+        : (await db.find({ selector, sort, skip: offset, limit: query.limit })).docs;
+    const rows = docs.map((d) => docToRow(d));
+    const known = totalFromWindow(docs.length, offset, query.limit);
+    if (known !== null) return { rows, total: known };
+    return { rows, total: (await this.findAll(db, { selector, fields: ['_id'] })).length };
+  }
+
+  /** Every document the query matches, read `pageSize` at a time through the bookmark (a query's `skip` applies to the first request only). */
+  private async findAll(db: CouchDBDatabase<CouchDoc>, query: MangoQuery): Promise<CouchDoc[]> {
+    const out: CouchDoc[] = [];
+    let bookmark: string | undefined;
+    for (;;) {
+      const page = await db.find({ ...query, limit: this.pageSize, ...(bookmark === undefined ? {} : { bookmark, skip: undefined }) });
+      out.push(...page.docs);
+      if (page.docs.length < this.pageSize) return out;
+      if (page.bookmark === undefined) throw new Error('CouchDB _find returned a full page without a bookmark, so the next page cannot be requested');
+      bookmark = page.bookmark;
+    }
   }
 }

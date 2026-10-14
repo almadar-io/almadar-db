@@ -143,8 +143,8 @@ function writePackage(lockFiles: Record<string, { sha256: string; bytes: number;
   const root = join(dir, 'pkg');
   mkdirSync(root, { recursive: true });
   const orb = {
-    prefix: 'p', registry: 'dist/registry', index: 'dist/index.json', factorySignatures: 'dist/f.json',
-    loloContracts: 'dist/c.json', signatures: 'dist/s.json', embeddings: [], compiler: '>=1',
+    prefix: 'p', registry: 'dist/registry', index: 'dist/index.json',
+    loloContracts: 'dist/c.json', embeddings: [], compiler: '>=1',
   };
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'pkg', version: '1.0.0', orb }));
   writeSidecarLock(root, lockFiles);

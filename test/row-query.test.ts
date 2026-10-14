@@ -65,3 +65,14 @@ describe('pageRows', () => {
     expect(pageRows(rows, { page: 9, pageSize: 2 })).toEqual({ rows: [], total: 3 });
   });
 });
+
+describe('rowMatches edge cases kept through the shared predicate evaluator', () => {
+  it('not-in and array-contains-any fail on a missing value and on a malformed operand', () => {
+    expect(rowMatches({ id: 'z' }, f('owner', 'not-in', ['u1']))).toBe(false);
+    expect(rowMatches({ id: 'z', owner: 'u3' }, f('owner', 'not-in', ['u1']))).toBe(true);
+    expect(rowMatches({ id: 'z', owner: 'u3' }, f('owner', 'not-in', 'u1'))).toBe(false);
+    expect(rowMatches({ id: 'z', tags: ['x'] }, f('tags', 'array-contains-any', []))).toBe(false);
+    expect(rowMatches({ id: 'z', tags: ['x'] }, f('tags', 'array-contains-any', 'x'))).toBe(false);
+    expect(rowMatches({ id: 'z', tags: ['x'] }, f('tags', 'array-contains-any', ['x']))).toBe(true);
+  });
+});

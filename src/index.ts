@@ -13,6 +13,13 @@ export {
   type RowQuery,
   type RowWhereOp,
 } from './firestore/persistence.js';
+export {
+  firestoreQueryCapabilities,
+  planQuery,
+  type FirestoreOrderBy,
+  type FirestoreQueryPlan,
+  type FirestoreWhere,
+} from './firestore/query-plan.js';
 export { FirestoreCredentialPersistence } from './credentials/firestore-credential-persistence.js';
 export { FileCredentialPersistence, CREDENTIALS_FILE_ENV } from './credentials/file-credential-persistence.js';
 
@@ -23,6 +30,9 @@ export {
   quoteIdent,
   buildWhere,
   buildPageQueries,
+  buildQueryPageSql,
+  type QuerySql,
+  type SqlColumnKind,
   type SqlFilter,
 } from './postgres/rows.js';
 export { ensureSchema, generateSchemaDdl, columnTypeFor, type SqlExecutor } from './postgres/schema/ddl.js';
@@ -40,9 +50,9 @@ export {
 } from './postgres/schema/evolution.js';
 
 export { CouchDBPersistence, type CouchDBPersistenceOptions } from './couchdb/persistence.js';
-export { databaseNameFor, type CouchDBClient, type CouchDoc } from './couchdb/rows.js';
+export { COUCHDB_QUERY_CAPABILITIES, databaseNameFor, mangoQueryFor, type CouchDBClient, type CouchDoc } from './couchdb/rows.js';
 
 export { observedPersistence, RowQuotaExceededError, type ObservedPersistenceOptions } from './observed/observed-persistence.js';
-export { filterRows, pageRows, rowMatches, sortRows } from './data/row-query.js';
+export { filterRows, pageRows, rowMatches, sortRows, totalFromWindow } from './data/row-query.js';
 export { isoTimestamps } from './data/timestamps.js';
 export { createPgPool, type PgPoolOptions } from './postgres/pool.js';

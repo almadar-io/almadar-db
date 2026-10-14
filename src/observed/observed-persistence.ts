@@ -4,7 +4,7 @@
  * per-entity row quota. A create beyond the quota is refused with `RowQuotaExceededError`; nothing
  * is ever dropped.
  */
-import type { EntityRow, PersistenceAdapter, RowPageRequest, StoreFilter } from '@almadar/core';
+import type { EntityRow, PersistenceAdapter, RowPageRequest, RowQuery, StoreFilter } from '@almadar/core';
 import { createLogger, timeCall } from '@almadar/logger';
 
 /** A create refused because the entity already holds `quota` rows in this store. */
@@ -29,6 +29,8 @@ export function observedPersistence(inner: PersistenceAdapter, options: Observed
   const countRows = inner.countRows?.bind(inner);
   const query = inner.query?.bind(inner);
   const listPage = inner.listPage?.bind(inner);
+  const queryPage = inner.queryPage?.bind(inner);
+  const queryCapabilities = inner.queryCapabilities?.bind(inner);
   if (rowQuota !== undefined && !countRows) {
     throw new Error(`A row quota needs an adapter that implements countRows; the ${service} adapter does not`);
   }
@@ -49,5 +51,7 @@ export function observedPersistence(inner: PersistenceAdapter, options: Observed
     ...(countRows ? { countRows: (entityType: string) => op('count', entityType, () => countRows(entityType)) } : {}),
     ...(query ? { query: (entityType: string, filters: readonly StoreFilter<EntityRow>[]) => op('query', entityType, () => query(entityType, filters)) } : {}),
     ...(listPage ? { listPage: (entityType: string, request: RowPageRequest<EntityRow>) => op('page', entityType, () => listPage(entityType, request)) } : {}),
+    ...(queryPage ? { queryPage: (entityType: string, request: RowQuery) => op('queryPage', entityType, () => queryPage(entityType, request)) } : {}),
+    ...(queryCapabilities ? { queryCapabilities } : {}),
   };
 }

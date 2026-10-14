@@ -5,11 +5,12 @@
  * `fetch`/`persist` against it exactly as a server runs them against Firestore
  * or Postgres. Sync-ready: minted ids are UUIDs, every write stamps `updatedAt`
  * and appends to an ordered change log (`__changes`) a later sync can replay.
- * `query`/`listPage` are left to the contract's fallback over `list`.
+ * `query`/`listPage` are left to the contract's fallback over `list`; `queryPage` evaluates the
+ * policy and filter in one cursor pass, so only matching rows are held, then orders and windows them.
  *
  * @packageDocumentation
  */
-import type { EntityRow, PersistenceAdapter } from "@almadar/core";
+import { FULL_QUERY_CAPABILITIES, rowMatchesPredicate, runRowQuery, type EntityRow, type PersistenceAdapter, type QueryCapabilities, type RowQuery, type RowQueryPage } from "@almadar/core";
 
 /** Object store holding the append-only write log. */
 export const CHANGE_LOG = "__changes";
@@ -130,6 +131,32 @@ export class IndexedDbPersistence implements PersistenceAdapter {
   async list(entityType: string): Promise<EntityRow[]> {
     const tx = this.db.transaction(this.store(entityType), "readonly");
     return request<EntityRow[]>(tx.objectStore(entityType).getAll());
+  }
+
+  async queryPage(entityType: string, query: RowQuery): Promise<RowQueryPage> {
+    const tx = this.db.transaction(this.store(entityType), "readonly");
+    const matched: EntityRow[] = [];
+    await new Promise<void>((resolve, reject) => {
+      const cursor = tx.objectStore(entityType).openCursor();
+      cursor.onerror = () => reject(cursor.error);
+      cursor.onsuccess = () => {
+        const at = cursor.result;
+        if (!at) return resolve();
+        const row: EntityRow = at.value;
+        if (
+          (query.policy === undefined || rowMatchesPredicate(row, query.policy)) &&
+          (query.filter === undefined || rowMatchesPredicate(row, query.filter))
+        ) {
+          matched.push(row);
+        }
+        at.continue();
+      };
+    });
+    return runRowQuery(matched, { order: query.order, offset: query.offset, limit: query.limit });
+  }
+
+  queryCapabilities(_entityType: string): QueryCapabilities {
+    return FULL_QUERY_CAPABILITIES;
   }
 
   async countRows(entityType: string): Promise<number> {
